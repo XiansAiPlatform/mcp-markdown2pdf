@@ -7,7 +7,7 @@ on:
   workflow_dispatch:  # Allow manual triggering
 
 env:
-  PACKAGE_NAME: "markdown2pdf-mcp"
+  PACKAGE_NAME: "@99xio/markdown2pdf-mcp"
   NPM_REGISTRY: https://registry.npmjs.org
 
 jobs:

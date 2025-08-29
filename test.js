@@ -1,86 +1,58 @@
-import puppeteer from 'puppeteer';
-import path from 'path';
+import { MarkdownPdfServer } from './build/index.js';
 import fs from 'fs';
+import path from 'path';
 import os from 'os';
-import tmp from 'tmp';
 
-async function test() {
-  const outputDir = os.tmpdir();
-  const outputPath = path.join(outputDir, 'test.pdf');
-  
-  console.log('Creating temporary HTML file...');
-  tmp.file({ postfix: '.html' }, async (err, tmpHtmlPath, tmpHtmlFd) => {
-    if (err) {
-      console.error('Error creating temp file:', err);
-      return;
-    }
-    
-    console.log('Temp HTML path:', tmpHtmlPath);
-    fs.closeSync(tmpHtmlFd);
-    
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <style>
-          @page {
-            margin: 20px;
-            size: letter portrait;
-          }
-          body { font-family: Arial; }
-        </style>
-      </head>
-      <body>
-        <h1>Test PDF Generation</h1>
-        <p>This is a test.</p>
-      </body>
-      </html>
-    `;
-    
-    try {
-      console.log('Writing HTML content...');
-      await fs.promises.writeFile(tmpHtmlPath, html);
-      
-      console.log('Launching browser...');
-      const browser = await puppeteer.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-      });
-      
+describe('MarkdownPdfServer', () => {
+  let server;
+  let tempDir;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'markdown2pdf-test-'));
+    process.env.M2P_OUTPUT_DIR = tempDir;
+  });
+
+  afterEach(async () => {
+    if (server) {
       try {
-        console.log('Creating new page...');
-        const page = await browser.newPage();
-        
-        console.log('Loading HTML file...');
-        await page.goto(`file://${tmpHtmlPath}`, {
-          waitUntil: 'networkidle0',
-          timeout: 30000
-        });
-        
-        console.log('Generating PDF...');
-        await page.pdf({
-          path: outputPath,
-          format: 'letter',
-          margin: {
-            top: '20mm',
-            right: '20mm',
-            bottom: '20mm',
-            left: '20mm'
-          },
-          printBackground: true
-        });
-        
-        console.log('PDF generated successfully');
-        console.log('Output path:', outputPath);
-        console.log('File exists:', fs.existsSync(outputPath));
-      } finally {
-        await browser.close();
+        await server.server?.close();
+      } catch (error) {
+        // Ignore cleanup errors
       }
-    } catch (error) {
-      console.error('Error:', error);
+    }
+    // Clean up temp directory
+    if (fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
     }
   });
-}
 
-test();
+  test('should create MarkdownPdfServer instance', () => {
+    server = new MarkdownPdfServer();
+    expect(server).toBeInstanceOf(MarkdownPdfServer);
+  });
+
+  test('should have required server properties', () => {
+    server = new MarkdownPdfServer();
+    expect(server.server).toBeDefined();
+  });
+
+  test('package.json should have correct structure', () => {
+    const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+    expect(pkg.name).toBe('@99xio/markdown2pdf-mcp');
+    expect(pkg.bin).toBeDefined();
+    expect(pkg.bin['markdown2pdf-mcp']).toBe('build/index.js');
+    expect(pkg.main).toBe('build/index.js');
+  });
+
+  test('build directory should exist with required files', () => {
+    expect(fs.existsSync('./build')).toBe(true);
+    expect(fs.existsSync('./build/index.js')).toBe(true);
+    expect(fs.existsSync('./build/css/pdf.css')).toBe(true);
+    expect(fs.existsSync('./build/puppeteer/render.js')).toBe(true);
+  });
+
+  test('built index.js should be executable', () => {
+    const stats = fs.statSync('./build/index.js');
+    expect(stats.mode & parseInt('755', 8)).toBeTruthy();
+  });
+});
