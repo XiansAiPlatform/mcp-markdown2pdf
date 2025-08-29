@@ -1,7 +1,7 @@
 {
   "name": "markdown2pdf-mcp",
   "version": "2.1.0",
-  "description": "MCP server for converting markdown to PDF",
+  "description": "MCP server for converting markdown to PDF - run with npx markdown2pdf-mcp to start the server",
   "keywords": [
     "model",
     "context",
@@ -11,7 +11,11 @@
     "mcp",
     "server",
     "productivity",
-    "tool"
+    "tool",
+    "cli",
+    "npx",
+    "converter",
+    "puppeteer"
   ],
   "homepage": "https://github.com/2b3pro/markdown2pdf-mcp#readme",
   "bugs": {
@@ -25,14 +29,18 @@
   "author": "2B3 PRODUCTIONS LLC",
   "type": "module",
   "main": "build/index.js",
+  "bin": {
+    "markdown2pdf-mcp": "build/index.js"
+  },
   "directories": {
     "test": "test"
   },
   "scripts": {
-    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\" && npm run copy-assets",
+    "build": "npx tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\" && npm run copy-assets",
     "copy-assets": "mkdir -p build/css build/puppeteer && cp src/css/pdf.css build/css/ && cp src/puppeteer/render.js build/puppeteer/ && cp src/runnings.js build/",
     "start": "node build/index.js",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",

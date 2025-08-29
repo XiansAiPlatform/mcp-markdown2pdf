@@ -1,7 +1,3 @@
-![](markdown-to-pdf-header.png)
-
-[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/2b3pro-markdown2pdf-mcp-badge.png)](https://mseep.ai/app/2b3pro-markdown2pdf-mcp)
-
 # Markdown2PDF MCP Server (markdown2pdf-mcp)
 
 An MCP server for converting Markdown documents to PDF files. This server provides a simple and efficient way to generate PDFs from Markdown content with support for syntax highlighting and custom styling. Also allows for watermarking on page 1.
@@ -179,6 +175,53 @@ npm run build
 # Start the server
 npm start
 ```
+
+## Publishing
+
+This package uses automated publishing via GitHub Actions. To publish a new version:
+
+1. **Update the version** in `package.json`:
+
+   ```bash
+   npm version patch  # for bug fixes
+   npm version minor  # for new features
+   npm version major  # for breaking changes
+   ```
+
+2. **Create and push a version tag**:
+
+   ```bash
+   git push origin main
+   git push origin --tags
+   ```
+
+3. **The GitHub Action will automatically**:
+   - Build the project
+   - Run tests
+   - Verify build output
+   - Publish to npm
+   - Generate a release summary
+
+### Manual Publishing
+
+If you need to publish manually:
+
+```bash
+# Make sure you're logged in to npm
+npm login
+
+# Build and publish
+npm run build
+npm publish
+```
+
+### NPM Token Setup
+
+For automated publishing, you need to set up an `NPM_TOKEN` secret in your GitHub repository:
+
+1. Go to [npmjs.com](https://www.npmjs.com) and create an access token
+2. In your GitHub repository, go to Settings → Secrets and variables → Actions
+3. Add a new secret named `NPM_TOKEN` with your npm access token
 
 ## License
 

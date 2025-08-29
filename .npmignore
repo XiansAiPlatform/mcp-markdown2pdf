@@ -1,0 +1,11 @@
+src/
+test/
+*.log
+.env*
+.DS_Store
+tsconfig.json
+jest.config.js
+test.js
+.git
+.gitignore
+output/
