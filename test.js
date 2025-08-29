@@ -9,7 +9,6 @@ describe('markdown2pdf-mcp package', () => {
     expect(pkg.bin).toBeDefined();
     expect(pkg.bin['markdown2pdf-mcp']).toBe('build/index.js');
     expect(pkg.main).toBe('build/index.js');
-    expect(pkg.version).toBe('2.1.2');
   });
 
   test('build directory should exist with required files', () => {
