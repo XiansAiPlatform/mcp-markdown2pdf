@@ -13,6 +13,7 @@ import path from 'path';
 import os from 'os';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
+import crypto from 'crypto';
 const require = createRequire(import.meta.url);
 const pkg = require('../package.json');
 const hljs = require('highlight.js');
@@ -36,7 +37,8 @@ export class MarkdownPdfServer {
       {
         capabilities: {
           tools: {
-            create_pdf_from_markdown: true
+            create_pdf_from_markdown: true,
+            create_pdf_from_markdown_file: true
           },
         },
       }
@@ -97,7 +99,7 @@ export class MarkdownPdfServer {
       tools: [
         {
           name: 'create_pdf_from_markdown',
-          description: 'Convert markdown content to PDF. Supports basic markdown elements like headers, lists, tables, code blocks, blockquotes, images (both local and external URLs), and Mermaid diagrams. Note: Cannot handle LaTeX math equations. Mermaid syntax errors will be displayed directly in the PDF output.',
+          description: 'Convert markdown content to PDF. Supports basic markdown elements like headers, lists, tables, code blocks, blockquotes, images (both local and external URLs), and Mermaid diagrams. Note: Cannot handle LaTeX math equations. Mermaid syntax errors will be displayed directly in the PDF output. Returns the absolute path of the generated PDF file.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -107,7 +109,7 @@ export class MarkdownPdfServer {
               },
               outputFilename: {
                 type: 'string',
-                description: 'Create a filename for the PDF file to be saved (default: "final-output.pdf"). The environmental variable M2P_OUTPUT_DIR sets the output path directory. If directory is not provided, it will default to user\'s HOME directory.',
+                description: 'Create a filename for the PDF file to be saved (default: randomly generated filename like "pdf_1703123456789_a1b2c3d4.pdf"). The environmental variable M2P_OUTPUT_DIR sets the output path directory. If directory is not provided, it will default to user\'s HOME directory.',
               },
               paperFormat: {
                 type: 'string',
@@ -137,128 +139,272 @@ export class MarkdownPdfServer {
             required: ['markdown']
           },
         },
+        {
+          name: 'create_pdf_from_markdown_file',
+          description: 'Convert markdown file to PDF. Reads markdown content from a file path and converts it to PDF. Supports basic markdown elements like headers, lists, tables, code blocks, blockquotes, images (both local and external URLs), and Mermaid diagrams. Note: Cannot handle LaTeX math equations. Mermaid syntax errors will be displayed directly in the PDF output. Returns the absolute path of the generated PDF file.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              filePath: {
+                type: 'string',
+                description: 'Path to the markdown file to convert to PDF',
+              },
+              outputFilename: {
+                type: 'string',
+                description: 'Create a filename for the PDF file to be saved (default: randomly generated filename like "pdf_1703123456789_a1b2c3d4.pdf"). The environmental variable M2P_OUTPUT_DIR sets the output path directory. If directory is not provided, it will default to user\'s HOME directory.',
+              },
+              paperFormat: {
+                type: 'string',
+                description: 'Paper format for the PDF (default: letter)',
+                enum: ['letter', 'a4', 'a3', 'a5', 'legal', 'tabloid'],
+                default: 'letter'
+              },
+              paperOrientation: {
+                type: 'string',
+                description: 'Paper orientation for the PDF (default: portrait)',
+                enum: ['portrait', 'landscape'],
+                default: 'portrait'
+              },
+              paperBorder: {
+                type: 'string',
+                description: 'Border margin for the PDF (default: 2cm). Use CSS units (cm, mm, in, px)',
+                pattern: '^[0-9]+(\.[0-9]+)?(cm|mm|in|px)$',
+                default: '20mm'
+              },
+              watermark: {
+                type: 'string',
+                description: 'Optional watermark text (max 15 characters, uppercase), e.g. "DRAFT", "PRELIMINARY", "CONFIDENTIAL", "FOR REVIEW", etc',
+                maxLength: 15,
+                pattern: '^[A-Z0-9\\s-]+$'
+              }
+            },
+            required: ['filePath']
+          },
+        },
       ],
     }));
 
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      if (request.params.name !== 'create_pdf_from_markdown') {
+      if (request.params.name === 'create_pdf_from_markdown') {
+        return this.handleCreatePdfFromMarkdown(request);
+      } else if (request.params.name === 'create_pdf_from_markdown_file') {
+        return this.handleCreatePdfFromMarkdownFile(request);
+      } else {
         throw new McpError(
           ErrorCode.MethodNotFound,
           `Unknown tool: ${request.params.name}`
         );
       }
+    });
+  }
 
-      if (!request.params.arguments) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
-          'No arguments provided'
-        );
-      }
+  private generateRandomFilename(): string {
+    const timestamp = Date.now();
+    const randomBytes = crypto.randomBytes(4).toString('hex');
+    return `pdf_${timestamp}_${randomBytes}.pdf`;
+  }
 
-      const args = request.params.arguments as {
-        markdown: string;
-        outputFilename?: string;
-        paperFormat?: string;
-        paperOrientation?: string;
-        paperBorder?: string;
-        watermark?: string;
-      };
+  private async handleCreatePdfFromMarkdown(request: Request): Promise<any> {
+    if (!request.params?.arguments) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        'No arguments provided'
+      );
+    }
 
-      // Get output directory from environment variable, outputFilename path, or default to user's home
-      const outputDir = process.env.M2P_OUTPUT_DIR 
-        ? path.resolve(process.env.M2P_OUTPUT_DIR)
-        : args.outputFilename && typeof args.outputFilename === 'string'
-          ? path.dirname(path.resolve(args.outputFilename))
-          : path.resolve(os.homedir());
+    const args = request.params.arguments as {
+      markdown: string;
+      outputFilename?: string;
+      paperFormat?: string;
+      paperOrientation?: string;
+      paperBorder?: string;
+      watermark?: string;
+    };
 
-      // Ensure output directory exists
-      if (!fs.existsSync(outputDir)) {
-        fs.mkdirSync(outputDir, { recursive: true });
-      }
+    const { markdown } = args;
+    return this.processMarkdownToPdf(args, markdown);
+  }
 
-      const { 
-        markdown, 
-        outputFilename = 'output.pdf',
-        paperFormat = 'letter',
-        paperOrientation = 'portrait',
-        paperBorder = '2cm',
-        watermark = ''
-      } = args;
+  private async handleCreatePdfFromMarkdownFile(request: Request): Promise<any> {
+    if (!request.params?.arguments) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        'No arguments provided'
+      );
+    }
 
-      // Ensure output filename has .pdf extension
-      const filename = outputFilename.toLowerCase().endsWith('.pdf') 
-        ? outputFilename 
-        : `${outputFilename}.pdf`;
+    const args = request.params.arguments as {
+      filePath: string;
+      outputFilename?: string;
+      paperFormat?: string;
+      paperOrientation?: string;
+      paperBorder?: string;
+      watermark?: string;
+    };
 
-      // Combine output directory with filename
-      const outputPath = path.join(outputDir, filename);
+    const { filePath } = args;
+    
+    // Validate file path
+    if (!filePath) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        'File path is required'
+      );
+    }
 
-      try {
-        // Track operation progress through response content
-        const progressUpdates: string[] = [];
-        
-        progressUpdates.push(`Starting PDF conversion (format: ${paperFormat}, orientation: ${paperOrientation})`);
-        progressUpdates.push(`Using output path: ${outputPath}`);
-        
-        await this.convertToPdf(
-          markdown,
-          outputPath,
-          paperFormat,
-          paperOrientation,
-          paperBorder,
-          watermark
-        );
+    // Resolve and check file path
+    const resolvedPath = path.resolve(filePath);
+    
+    if (!fs.existsSync(resolvedPath)) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        `File not found: ${resolvedPath}`
+      );
+    }
 
-        // Verify file was created
-        if (!fs.existsSync(outputPath)) {
-          throw new McpError(
-            ErrorCode.InternalError,
-            'PDF file was not created',
-            {
-              details: {
-                outputPath,
-                paperFormat,
-                paperOrientation
-              }
-            }
-          );
-        }
+    // Check if it's a file (not a directory)
+    const stats = fs.statSync(resolvedPath);
+    if (!stats.isFile()) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        `Path is not a file: ${resolvedPath}`
+      );
+    }
 
-        // Ensure absolute path is returned
-        const absolutePath = path.resolve(outputPath);
-        progressUpdates.push(`PDF file created successfully at: ${absolutePath}`);
-        progressUpdates.push(`File exists: ${fs.existsSync(absolutePath)}`);
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: progressUpdates.join('\n')
-            },
-          ],
-        };
-      } catch (error: unknown) {
-        if (error instanceof Error) {
-          throw new McpError(
-            ErrorCode.InternalError,
-            `PDF generation failed: ${error.message}`,
-            {
-              details: {
-                name: error.name,
-                stack: error.stack,
-                outputPath,
-                paperFormat,
-                paperOrientation
-              }
-            }
-          );
-        }
+    try {
+      // Read markdown content from file
+      const markdown = await fs.promises.readFile(resolvedPath, 'utf8');
+      
+      // Use the same processing logic as the markdown content tool
+      return this.processMarkdownToPdf(args, markdown, `Reading from file: ${resolvedPath}`);
+    } catch (error) {
+      if (error instanceof Error) {
         throw new McpError(
           ErrorCode.InternalError,
-          `PDF generation failed: ${String(error)}`
+          `Failed to read markdown file: ${error.message}`,
+          {
+            details: {
+              filePath: resolvedPath,
+              name: error.name,
+              stack: error.stack
+            }
+          }
         );
       }
-    });
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to read markdown file: ${String(error)}`
+      );
+    }
+  }
+
+  private async processMarkdownToPdf(
+    args: {
+      outputFilename?: string;
+      paperFormat?: string;
+      paperOrientation?: string;
+      paperBorder?: string;
+      watermark?: string;
+    },
+    markdown: string,
+    additionalProgressInfo?: string
+  ): Promise<any> {
+    // Get output directory from environment variable, outputFilename path, or default to user's home
+    const outputDir = process.env.M2P_OUTPUT_DIR 
+      ? path.resolve(process.env.M2P_OUTPUT_DIR)
+      : args.outputFilename && typeof args.outputFilename === 'string'
+        ? path.dirname(path.resolve(args.outputFilename))
+        : path.resolve(os.homedir());
+
+    // Ensure output directory exists
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    const { 
+      outputFilename = this.generateRandomFilename(),
+      paperFormat = 'letter',
+      paperOrientation = 'portrait',
+      paperBorder = '2cm',
+      watermark = ''
+    } = args;
+
+    // Ensure output filename has .pdf extension
+    const filename = outputFilename.toLowerCase().endsWith('.pdf') 
+      ? outputFilename 
+      : `${outputFilename}.pdf`;
+
+    // Combine output directory with filename
+    const outputPath = path.join(outputDir, filename);
+
+    try {
+      // Track operation progress through response content
+      const progressUpdates: string[] = [];
+      
+      if (additionalProgressInfo) {
+        progressUpdates.push(additionalProgressInfo);
+      }
+      progressUpdates.push(`Starting PDF conversion (format: ${paperFormat}, orientation: ${paperOrientation})`);
+      progressUpdates.push(`Using output path: ${outputPath}`);
+      
+      await this.convertToPdf(
+        markdown,
+        outputPath,
+        paperFormat,
+        paperOrientation,
+        paperBorder,
+        watermark
+      );
+
+      // Verify file was created
+      if (!fs.existsSync(outputPath)) {
+        throw new McpError(
+          ErrorCode.InternalError,
+          'PDF file was not created',
+          {
+            details: {
+              outputPath,
+              paperFormat,
+              paperOrientation
+            }
+          }
+        );
+      }
+
+      // Ensure absolute path is returned
+      const absolutePath = path.resolve(outputPath);
+      progressUpdates.push(`PDF file created successfully at: ${absolutePath}`);
+      progressUpdates.push(`File exists: ${fs.existsSync(absolutePath)}`);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `PDF Generation Complete!\n\nGenerated File Path: ${absolutePath}\n\n${progressUpdates.join('\n')}`
+          }
+        ],
+      };
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        throw new McpError(
+          ErrorCode.InternalError,
+          `PDF generation failed: ${error.message}`,
+          {
+            details: {
+              name: error.name,
+              stack: error.stack,
+              outputPath,
+              paperFormat,
+              paperOrientation
+            }
+          }
+        );
+      }
+      throw new McpError(
+        ErrorCode.InternalError,
+        `PDF generation failed: ${String(error)}`
+      );
+    }
   }
 
   private getIncrementalPath(basePath: string): string {

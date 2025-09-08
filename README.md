@@ -4,6 +4,32 @@ An MCP server for converting Markdown documents to PDF files. This server provid
 
 Inspired by Alan Shaw's [markdown-pdf](https://github.com/alanshaw/markdown-pdf).
 
+## Quick Start
+
+**Package:** `@99xio/markdown2pdf-mcp@2.1.5`
+
+**Install and run:**
+
+```bash
+npx @99xio/markdown2pdf-mcp
+```
+
+**MCP Configuration:**
+
+```json
+{
+  "mcpServers": {
+    "markdown2pdf": {
+      "command": "npx",
+      "args": ["@99xio/markdown2pdf-mcp"],
+      "env": {
+        "M2P_OUTPUT_DIR": "/path/to/output/directory"
+      }
+    }
+  }
+}
+```
+
 ## Features
 
 - Convert Markdown to PDF with a single command
@@ -72,7 +98,11 @@ npm run build
 ## Installation (via npm)
 
 ```bash
-npm install markdown2pdf-mcp
+# Install globally
+npm install -g @99xio/markdown2pdf-mcp
+
+# Or use with npx (no installation needed)
+npx @99xio/markdown2pdf-mcp
 ```
 
 ## Usage
@@ -80,12 +110,23 @@ npm install markdown2pdf-mcp
 ### Starting the Server
 
 ```bash
+# Using npx (recommended)
+npx @99xio/markdown2pdf-mcp
+
+# Or if installed globally
+@99xio/markdown2pdf-mcp
+
+# Or from source
 npm start
 ```
 
-### Using the MCP Tool
+### Using the MCP Tools
 
-The server provides a single tool `create_pdf_from_markdown` with the following parameters:
+The server provides two tools for converting markdown to PDF:
+
+#### 1. `create_pdf_from_markdown`
+
+Convert markdown content directly to PDF with the following parameters:
 
 ```typescript
 {
@@ -101,7 +142,27 @@ The server provides a single tool `create_pdf_from_markdown` with the following 
 }
 ```
 
-Example with options:
+#### 2. `create_pdf_from_markdown_file`
+
+Convert a markdown file to PDF by providing the file path with the following parameters:
+
+```typescript
+{
+  // Required parameters
+  filePath: string;    // Path to the markdown file to convert
+
+  // Optional parameters with defaults
+  outputFilename?: string;  // Filename for the PDF (e.g., "output.pdf")
+  paperFormat?: string;     // 'letter' (default), 'a4', 'a3', 'a5', 'legal', 'tabloid'
+  paperOrientation?: string; // 'portrait' (default), 'landscape'
+  paperBorder?: string;     // '2cm' (default), accepts decimal values with CSS units (e.g., '1.5cm', '2.5mm', '0.5in', '10.5px')
+  watermark?: string;       // Optional watermark text (max 15 characters, uppercase)
+}
+```
+
+### Examples
+
+Example with `create_pdf_from_markdown` (direct content):
 
 ```typescript
 await use_mcp_tool({
@@ -118,7 +179,24 @@ await use_mcp_tool({
 });
 ```
 
-Example minimal usage:
+Example with `create_pdf_from_markdown_file` (from file):
+
+```typescript
+await use_mcp_tool({
+  server_name: "markdown2pdf",
+  tool_name: "create_pdf_from_markdown_file",
+  arguments: {
+    filePath: "/path/to/your/document.md",
+    outputFilename: "output.pdf",
+    paperFormat: "a4",
+    paperOrientation: "landscape",
+    paperBorder: "1.5cm",
+    watermark: "DRAFT",
+  },
+});
+```
+
+Example minimal usage (direct content):
 
 ```typescript
 await use_mcp_tool({
@@ -127,6 +205,18 @@ await use_mcp_tool({
   arguments: {
     markdown: "# Hello World\n\nThis is a test document.",
     outputFilename: "output.pdf",
+  },
+});
+```
+
+Example minimal usage (from file):
+
+```typescript
+await use_mcp_tool({
+  server_name: "markdown2pdf",
+  tool_name: "create_pdf_from_markdown_file",
+  arguments: {
+    filePath: "/path/to/your/document.md",
   },
 });
 ```
@@ -141,8 +231,57 @@ You can configure the output directory in your MCP settings file for apps that u
 {
   "mcpServers": {
     "markdown2pdf": {
+      "command": "npx",
+      "args": ["@99xio/markdown2pdf-mcp@2.1.5"],
+      "env": {
+        "M2P_OUTPUT_DIR": "/path/to/output/directory"
+      }
+    }
+  }
+}
+```
+
+**Alternative configurations:**
+
+Using latest version:
+
+```json
+{
+  "mcpServers": {
+    "markdown2pdf": {
+      "command": "npx",
+      "args": ["@99xio/markdown2pdf-mcp"],
+      "env": {
+        "M2P_OUTPUT_DIR": "/path/to/output/directory"
+      }
+    }
+  }
+}
+```
+
+Using global installation:
+
+```json
+{
+  "mcpServers": {
+    "markdown2pdf": {
+      "command": "@99xio/markdown2pdf-mcp",
+      "env": {
+        "M2P_OUTPUT_DIR": "/path/to/output/directory"
+      }
+    }
+  }
+}
+```
+
+Using local build (from source):
+
+```json
+{
+  "mcpServers": {
+    "markdown2pdf": {
       "command": "node",
-      "args": ["path/to/markdown2pdf-mcp/build/index.js"],
+      "args": ["/path/to/markdown2pdf-mcp/build/index.js"],
       "env": {
         "M2P_OUTPUT_DIR": "/path/to/output/directory"
       }
