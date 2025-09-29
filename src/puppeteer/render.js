@@ -1,5 +1,5 @@
 import puppeteer from 'puppeteer';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
@@ -83,8 +83,9 @@ async function renderPDF({
       throw new Error(`Failed to load HTML content: ${err.message}`);
     });
 
-    // Import runnings (header/footer)
-    const runnings = await import(runningsPath).catch(err => {
+    // Import runnings (header/footer) - convert path to file URL for Windows compatibility
+    const runningsFileUrl = pathToFileURL(runningsPath).href;
+    const runnings = await import(runningsFileUrl).catch(err => {
       throw new Error(`Failed to import runnings.js: ${err.message}`);
     });
 
